@@ -22,7 +22,6 @@ MainWindow::~MainWindow()
 {
     for(int i = 0; i < 8; ++i){
         CloseHandle(PI[i].hThread);
-        CloseHandle((PI[i]).hProcess);
     }
 
     delete ui;
@@ -39,23 +38,17 @@ void MainWindow::on_start_all_clicked()
         PROCESS_INFORMATION processInfo;
         ZeroMemory(&info, sizeof(STARTUPINFO));
         ZeroMemory(&processInfo, sizeof(PROCESS_INFORMATION));
-        std::string path = "C:\\Users\\Yaroslav\\Documents\\multiprocessing_tab\\executable.exe";
+        std::wstring wCommand(createCommLineArguments(ui->num_of_processes->currentText().toInt(), A, B, steps_q).begin(), createCommLineArguments(ui->num_of_processes->currentText().toInt(), A, B, steps_q).end());
+        LPWSTR lpwCommand = &(wCommand[0]);
 
-        //wchar_t * path = L"C:\\Users\\Yaroslav\\Documents\\MultyThredingProgram\\mLab.exe";
-
-        std::string command = "C:\\Users\\Yaroslav\\Documents\\multiprocessing_tab\\executable.exe " + std::to_string(A) + ' ' + std::to_string(B) + ' ' + std::to_string(steps_q);
-
-        //std::wstring wide_str_command = std::wstring(command.begin(), command.end());
-        //const wchar_t* command_CWstr = wide_str_command.c_str();
-
-        if(!CreateProcessA((LPCSTR)path.c_str(),
-                      (LPSTR)command.c_str(), //const_cast<LPSTR>(command.c_str()),
+        if(!CreateProcess(L"C:\\Users\\Yaroslav\\Documents\\MultyThredingProgram\\executable.exe",
+                      lpwCommand,
                       nullptr,
                       nullptr,
                       FALSE, CREATE_NO_WINDOW | CREATE_SUSPENDED,
                       nullptr,
                       nullptr,
-                      (LPSTARTUPINFOA)&info,
+                      (LPSTARTUPINFOW)&info,
                       &processInfo))
         {
             std::cout << "Create process failed " << GetLastError() << std::endl;
@@ -66,7 +59,31 @@ void MainWindow::on_start_all_clicked()
         ui->tableWidget->setItem(i, 0, new QTableWidgetItem(QString::number(processInfo.dwProcessId)));
         ui->tableWidget->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(priority(GetPriorityClass(PI[i].hProcess)))));
     }
+}
 
+std::string MainWindow::createCommLineArguments( int numOfProcesses, double A, double B, int steps){
+    std::string command = path + ' ';
+    switch (numOfProcesses)
+    {
+        case 1:
+            command += std::to_string(A) +' '+ std::to_string(B) +' '+ std::to_string(steps) + " tabulation" + std::to_string(numOfProcesses) + ".txt";
+            return command;
+        case 2:
+            if(numberOfDivisions)
+            {
+                command += std::to_string(A) +' '+ std::to_string((B-A)/2.0) +' '+ std::to_string(steps/2) + " tabulation" + std::to_string(numOfProcesses);
+                numberOfDivisions++;
+            }else{
+                command += std::to_string((B-A)/2.0) +' '+ std::to_string(B) +' '+ std::to_string(steps/2) + " tabulation" + std::to_string(numOfProcesses+1);
+            }
+            return command;
+        case 4:
+            return command;
+        case 8:
+            return command;
+    default:
+        return "";
+    }
 }
 
 std::string MainWindow::priority(DWORD code){
@@ -137,9 +154,9 @@ void MainWindow::on_Set_clicked()
 
 void MainWindow::on_run_clicked()
 {
-    ui->tableWidget->item(ui->comboBox_2->currentIndex(), 2)->setText("Running");
     //qApp->processEvents();
     ResumeThread(PI[ui->comboBox_2->currentIndex()].hThread);
+    ui->tableWidget->item(ui->comboBox_2->currentIndex(), 2)->setText("Running");
     WaitForSingleObject(PI[ui->comboBox_2->currentIndex()].hProcess, INFINITE);
     ui->tableWidget->item(ui->comboBox_2->currentIndex(), 2)->setText("Finished");
     ui->tableWidget->item(ui->comboBox_2->currentIndex(),1)->setText(QString::fromStdString((priority(GetPriorityClass(PI[ui->comboBox_2->currentIndex()].hProcess)))));

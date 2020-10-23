@@ -22,6 +22,7 @@ private slots:
     std::string priority(DWORD);
     void on_comboBox_2_currentIndexChanged(int index);
     void on_priority_currentIndexChanged(int index);
+    std::string createCommLineArguments(int numOfProcesses, double A, double B, int steps);
     void on_kill_clicked();
     void on_suspend_clicked();
     void on_run_clicked();
@@ -30,6 +31,8 @@ private slots:
 
 private:
     PROCESS_INFORMATION PI[8];
+    int numberOfDivisions = 0;
     Ui::MainWindow *ui;
+    std::string path = "C:\\Users\\Yaroslav\\Documents\\MultyThredingProgram\\executable.exe";
 };
 #endif // MAINWINDOW_H
