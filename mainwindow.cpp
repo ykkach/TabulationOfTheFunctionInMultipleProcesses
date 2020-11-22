@@ -14,13 +14,12 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    ui->tableWidget->setRowCount(8);
-    ui->tableWidget->setColumnCount(0);
 }
 
 MainWindow::~MainWindow()
 {
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < ui->num_of_processes->currentText().toInt(); ++i){
+        TerminateProcess(PI->hProcess,0);
         CloseHandle(PI[i].hThread);
     }
 
@@ -29,60 +28,50 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_start_all_clicked()
 {
-    int steps_q = ui->textEdit_steps->toPlainText().toInt();
+    numOfProcesses = ui->num_of_processes->currentText().toInt();
+    ui->tableWidget->setRowCount(numOfProcesses);
+    ui->tableWidget->setColumnCount(4);
+    ui->tableWidget->setHorizontalHeaderItem(0, new QTableWidgetItem("PID"));
+    ui->tableWidget->setHorizontalHeaderItem(1, new QTableWidgetItem("Priority"));
+    ui->tableWidget->setHorizontalHeaderItem(2, new QTableWidgetItem("State"));
+    ui->tableWidget->setHorizontalHeaderItem(3, new QTableWidgetItem("Time"));
+    int steps_q = ui->textEdit_steps->toPlainText().toInt()/numOfProcesses;
     double A = ui->textEdit_A->toPlainText().toDouble(), B = ui->textEdit_B->toPlainText().toDouble();
+    double div = (B-A)/numOfProcesses;
 
-    for(int i = 0; i < ui->num_of_processes->currentText().toInt(); i++)
+    for(int i = 0; i < numOfProcesses; i++)
     {
         STARTUPINFO info;
         PROCESS_INFORMATION processInfo;
         ZeroMemory(&info, sizeof(STARTUPINFO));
         ZeroMemory(&processInfo, sizeof(PROCESS_INFORMATION));
-        std::wstring wCommand(createCommLineArguments(ui->num_of_processes->currentText().toInt(), A, B, steps_q).begin(), createCommLineArguments(ui->num_of_processes->currentText().toInt(), A, B, steps_q).end());
+        B = A + div;
+
+        std::string strCommandLineArgs = path + " " + std::to_string(A) + " " + std::to_string(B) + " " + std::to_string(steps_q) + + " tabulation" + std::to_string(i) + ".txt";
+        A += div;
+        std::wstring wCommand(strCommandLineArgs.begin(), strCommandLineArgs.end());
         LPWSTR lpwCommand = &(wCommand[0]);
 
         if(!CreateProcess(L"C:\\Users\\Yaroslav\\Documents\\MultyThredingProgram\\executable.exe",
                       lpwCommand,
                       nullptr,
                       nullptr,
-                      FALSE, CREATE_NO_WINDOW | CREATE_SUSPENDED,
+                      FALSE,
+                      CREATE_NO_WINDOW | CREATE_SUSPENDED,
                       nullptr,
                       nullptr,
-                      (LPSTARTUPINFOW)&info,
+                      /*(LPSTARTUPINFOW)*/&info,
                       &processInfo))
         {
             std::cout << "Create process failed " << GetLastError() << std::endl;
-            return;
+            exit(EXIT_FAILURE);
         }
 
         PI[i] = processInfo;
         ui->tableWidget->setItem(i, 0, new QTableWidgetItem(QString::number(processInfo.dwProcessId)));
         ui->tableWidget->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(priority(GetPriorityClass(PI[i].hProcess)))));
-    }
-}
+        ui->tableWidget->setItem(i,2,new QTableWidgetItem("Suspended"));
 
-std::string MainWindow::createCommLineArguments( int numOfProcesses, double A, double B, int steps){
-    std::string command = path + ' ';
-    switch (numOfProcesses)
-    {
-        case 1:
-            command += std::to_string(A) +' '+ std::to_string(B) +' '+ std::to_string(steps) + " tabulation" + std::to_string(numOfProcesses) + ".txt";
-            return command;
-        case 2:
-            if(numberOfDivisions)
-            {
-                command += std::to_string(A) +' '+ std::to_string((B-A)/2.0) +' '+ std::to_string(steps/2) + " tabulation" + std::to_string(numOfProcesses);
-                numberOfDivisions++;
-            }else{
-                command += std::to_string((B-A)/2.0) +' '+ std::to_string(B) +' '+ std::to_string(steps/2) + " tabulation" + std::to_string(numOfProcesses+1);
-            }
-            return command;
-        case 4:
-            return command;
-        case 8:
-            return command;
-    default:
-        return "";
     }
 }
 
@@ -100,47 +89,22 @@ std::string MainWindow::priority(DWORD code){
 
 void MainWindow::on_Set_clicked()
 {
-    int handleCounter = 0;
-    HANDLE processHandles[8];
-    for(int i = 0; i < ui->num_of_processes->currentText().toInt(); ++i){
-         /*if(ui->tableWidget->item(i,2)->text() == "Terminated"){
-             continue;
-         }*/
-         processHandles[handleCounter++] = PI[i].hThread;
-    }
-   QElapsedTimer timer;
-   timer.start();
-    for(int i = 0; i < ui->num_of_processes->currentText().toInt(); ++i){
-        /*if(ui->tableWidget->item(i,2)->text() == "Terminated"){
-            continue;
-        }*/
+    HANDLE threadHandles[numOfProcesses];
+
+    QElapsedTimer timer;
+    timer.start();
+
+    for(int i = 0; i < numOfProcesses; ++i){
         ui->tableWidget->item(i, 2)->setText("Running");
         ResumeThread(PI[i].hThread);
     }
-    for(int i = 0; i < handleCounter; ++i){
-        DWORD dwExitCode = WaitForSingleObject(processHandles[i], INFINITE);
-        if((dwExitCode == WAIT_FAILED   )
-                || (dwExitCode == WAIT_OBJECT_0 )
-                || (dwExitCode == WAIT_ABANDONED) )
-        {
-            GetExitCodeProcess(PI[i].hProcess, &dwExitCode);
-
-            //-- the task has ended so close the handle
-            CloseHandle(PI[i].hThread);
-            CloseHandle(PI[i].hProcess);
-        }
-    }
-    //WaitForMultipleObjects(handleCounter, threadHandles, TRUE, INFINITE);
+    WaitForMultipleObjects(numOfProcesses, threadHandles, TRUE, INFINITE);
     timer.nsecsElapsed();
 
-    __int64 kernel, user, creation, exit, result;
-    result = 0;
+    __int64 kernel, user, creation, exit, result = 0;
 
-
-    for(int i = 0; i < ui->num_of_processes->currentText().toInt(); ++i){
-         /*if(ui->tableWidget->item(i,2)->text() == "Terminated"){
-             continue;
-         }*/
+    for(int i = 0; i < numOfProcesses; ++i){
+         result = 0;
          kernel = 0;
          user = 0;
          GetProcessTimes(PI[i].hProcess,(FILETIME*)&creation,(FILETIME*)&exit,(FILETIME*)&kernel,(FILETIME*)&user);
@@ -148,13 +112,12 @@ void MainWindow::on_Set_clicked()
          result += user;
 
          ui->tableWidget->item(i, 2)->setText("Finished");
+         ui->tableWidget->setItem(i,3,new QTableWidgetItem(QString::number(result*0.000001), 'g'));
     }
-      ui->timer->setText(QString::number( result/10000.0));
 }
 
 void MainWindow::on_run_clicked()
 {
-    //qApp->processEvents();
     ResumeThread(PI[ui->comboBox_2->currentIndex()].hThread);
     ui->tableWidget->item(ui->comboBox_2->currentIndex(), 2)->setText("Running");
     WaitForSingleObject(PI[ui->comboBox_2->currentIndex()].hProcess, INFINITE);
